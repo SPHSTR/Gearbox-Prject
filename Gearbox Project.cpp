@@ -60,19 +60,6 @@ void BackwardStep(int StepMove){
   }
 }
 
-int GearRatio[] = {-2,-1,0,1,2,3,4};
-LCD_I2C lcd(0x27, 16, 2);
-void LCD_Write(){
-  lcd.setCursor(2, 0);
-  lcd.print("Gear Pos = ");
-  lcd.print(PrevGearState-1);
-  lcd.print(" Ratio = ");
-  lcd.print(GearRatio[PrevGearState-1]);
-  lcd.setCursor(2, 1);
-  lcd.print("Rev/min = ");
-  lcd.print(Rev * 60);
-}
-
 #define ON_OFF_pin_out  12
 #define ON_OFF_pin_in  14
 #define UpShift_pin_out  25
@@ -117,44 +104,6 @@ String Mqtt_input;
 void messageReceived(String &topic, String &payload) {
   //Serial.println("incoming: " + topic + " - " + payload);
   Mqtt_input = payload;
-}
-
-void setup() {
-  ledcAttachPin(DC_Motor, DC_MOtorChannel);           //dc motor control
-  ledcSetup(DC_MOtorChannel, freq, resolution);       //dc motor control
-
-  pinMode(Hall_Sensor, INPUT);                              //rev meter
-  attachInterrupt(Hall_Sensor, &RevCounter, RISING);  
-  My_timer = timerBegin(0, 80, true);
-  timerAttachInterrupt(My_timer, &Revcal, true);
-  timerAlarmWrite(My_timer, calTimeMicroS, true);
-  timerAlarmEnable(My_timer);                               //rev meter
-
-  pinMode(Step1, OUTPUT);     //stepped motor 
-  pinMode(Step2, OUTPUT);
-  pinMode(Step3, OUTPUT);
-  pinMode(Step4, OUTPUT);     //stepped motor 
-
-  lcd.begin();    //LCD
-  lcd.backlight();
-
-  pinMode(ON_OFF_pin_out, OUTPUT);                  //on off
-  pinMode(ON_OFF_pin_in, INPUT);
-  attachInterrupt(ON_OFF_pin_in, &Start_Stop, RISING); //on off
-
-  pinMode(UpShift_pin_out, OUTPUT);                 //unshift
-  pinMode(UpShift_pin_in, INPUT);
-  attachInterrupt(UpShift_pin_in, &Shiftup, RISING); //unshift
-
-  pinMode(DownShift_pin_out, OUTPUT);                 //downshift
-  pinMode(DownShift_pin_in, INPUT);
-  attachInterrupt(DownShift_pin_in, &Shiftdown, RISING);  //downshift
-
-  WiFi.begin(ssid, pass);
-  client.begin(mqtt_broker, MQTT_PORT, net);
-  client.onMessage(messageReceived);
-
-  connect();
 }
 
 int DCPulse[] = {0,1024};
@@ -215,7 +164,59 @@ void IRAM_ATTR Shiftdown(){
   }
 }
 
-void IRAM_ATTR loop() {
+int GearRatio[] = {-2,-1,0,1,2,3,4};
+LCD_I2C lcd(0x27, 16, 2);
+void LCD_Write(){
+  lcd.clear();
+  lcd.setCursor(2, 0);
+  lcd.print("Gear Pos = ");
+  lcd.print(PrevGearState-1);
+  lcd.print(" Ratio = ");
+  lcd.print(GearRatio[PrevGearState-1]);
+  lcd.setCursor(2, 1);
+  lcd.print("Rev/min = ");
+  lcd.print(Rev * 60);
+}
+
+void setup() {
+  ledcAttachPin(DC_Motor, DC_MOtorChannel);           //dc motor control
+  ledcSetup(DC_MOtorChannel, freq, resolution);       //dc motor control
+
+  pinMode(Hall_Sensor, INPUT);                              //rev meter
+  attachInterrupt(Hall_Sensor, &RevCounter, RISING);  
+  My_timer = timerBegin(0, 80, true);
+  timerAttachInterrupt(My_timer, &Revcal, true);
+  timerAlarmWrite(My_timer, calTimeMicroS, true);
+  timerAlarmEnable(My_timer);                               //rev meter
+
+  pinMode(Step1, OUTPUT);     //stepped motor 
+  pinMode(Step2, OUTPUT);
+  pinMode(Step3, OUTPUT);
+  pinMode(Step4, OUTPUT);     //stepped motor 
+
+  lcd.begin();    //LCD
+  lcd.backlight();
+
+  pinMode(ON_OFF_pin_out, OUTPUT);                  //on off
+  pinMode(ON_OFF_pin_in, INPUT);
+  attachInterrupt(ON_OFF_pin_in, &Start_Stop, RISING); //on off
+
+  pinMode(UpShift_pin_out, OUTPUT);                 //unshift
+  pinMode(UpShift_pin_in, INPUT);
+  attachInterrupt(UpShift_pin_in, &Shiftup, RISING); //unshift
+
+  pinMode(DownShift_pin_out, OUTPUT);                 //downshift
+  pinMode(DownShift_pin_in, INPUT);
+  attachInterrupt(DownShift_pin_in, &Shiftdown, RISING);  //downshift
+
+  WiFi.begin(ssid, pass);
+  client.begin(mqtt_broker, MQTT_PORT, net);
+  client.onMessage(messageReceived);
+
+  connect();
+}
+
+void loop() {
   Mqtt_input = "0";
   client.loop();
 
@@ -226,7 +227,6 @@ void IRAM_ATTR loop() {
   client.publish(mqtt_rev_topic , String(Rev * 60));
   client.publish(mqtt_gear_topic , String(GearRatio[PrevGearState-1]) + " " + String(PrevGearState-1));
   LCD_Write();
-
 
   if(Mqtt_input != "0"){
     if(Mqtt_input == "+"){
@@ -243,5 +243,4 @@ void IRAM_ATTR loop() {
       digitalWrite(ON_OFF_pin_out,LOW);
     }
   }
-
 }

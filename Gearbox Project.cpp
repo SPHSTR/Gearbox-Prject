@@ -35,7 +35,7 @@ void IRAM_ATTR Revcal(){
 #define Step4  17
 int FsteppedPin[] = {Step1,Step2,Step3,Step4};
 int BsteppedPin[] = {Step4,Step3,Step2,Step1};
-void ForwardStep(int StepMove){
+void Step(int StepMove){
   if(StepMove >= 0){
      unsigned long last_interrupt_time2 = 0;
   for(int i=0; i<StepMove;){
@@ -63,21 +63,6 @@ void ForwardStep(int StepMove){
     last_interrupt_time3 = interrupt_time3;
     }
   }
-  }
-}
-
-void BackwardStep(int StepMove){
-  unsigned long last_interrupt_time3 = 0;
-  for(int i=0; i<StepMove;){
-    unsigned long interrupt_time3 = millis();
-    if (interrupt_time3 - last_interrupt_time3 > 1){
-    digitalWrite(BsteppedPin[i%4], HIGH);
-    digitalWrite(BsteppedPin[(i+1)%4], LOW);
-    digitalWrite(BsteppedPin[(i+2)%4], LOW);
-    digitalWrite(BsteppedPin[(i+3)%4], LOW);
-    i+=1;
-    last_interrupt_time3 = interrupt_time3;
-    }
   }
 }
 
@@ -145,7 +130,7 @@ void IRAM_ATTR Start_Stop(){
 }
 
 int stepmoveup[] = {1000,1000,1000,1000,1000,1000,0};
-int stepmovedown[] = {0,1000,1000,1000,1000,1000,1000};
+int stepmovedown[] = {0,-1000,-1000,-1000,-1000,-1000,-1000};
 int GearState = 0;
 int PrevGearState = 1;
 int Gearcount = 0;
@@ -166,7 +151,7 @@ void IRAM_ATTR Shiftup(){
     last_interrupt_time4 = interrupt_time4;
     }else {
       ledcWrite(DC_MOtorChannel, DCPulse[DCmotorCount%2]);
-      ForwardStep(stepmoveup[PrevGearState-1]);
+      //Step(stepmoveup[PrevGearState-1]);
       PrevGearState = GearState;
       i+=1;
     }
@@ -174,9 +159,7 @@ void IRAM_ATTR Shiftup(){
   }
   doUpShift = false;
   }
-}
 
-void IRAM_ATTR Shiftdown(){
   if(doDownShift){
   Serial.println(Gearcount);
   Gearcount -=1;
@@ -193,7 +176,7 @@ void IRAM_ATTR Shiftdown(){
     last_interrupt_time5 = interrupt_time5;
     }else {
       ledcWrite(DC_MOtorChannel, DCPulse[DCmotorCount%2]);
-      BackwardStep(stepmovedown[PrevGearState-1]);
+      //Step(stepmovedown[PrevGearState-1]);
       PrevGearState = GearState;
       i+=1;
     }

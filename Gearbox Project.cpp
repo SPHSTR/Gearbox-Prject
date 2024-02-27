@@ -40,7 +40,7 @@ void Step(int StepMove){
      unsigned long last_interrupt_time2 = 0;
   for(int i=0; i<StepMove;){
     unsigned long interrupt_time2 = millis();
-    if (interrupt_time2 - last_interrupt_time2 > 1){
+    if (interrupt_time2 - last_interrupt_time2 > 2){
     digitalWrite(FsteppedPin[i%4], HIGH);
     digitalWrite(FsteppedPin[(i+1)%4], LOW);
     digitalWrite(FsteppedPin[(i+2)%4], LOW);
@@ -49,12 +49,13 @@ void Step(int StepMove){
     last_interrupt_time2 = interrupt_time2;
     }
   }
+  ledcWrite(DC_MOtorChannel, DCPulse[0]);
   }else {
     StepMove = abs(StepMove);
     unsigned long last_interrupt_time3 = 0;
   for(int i=0; i<StepMove;){
     unsigned long interrupt_time3 = millis();
-    if (interrupt_time3 - last_interrupt_time3 > 1){
+    if (interrupt_time3 - last_interrupt_time3 > 2){
     digitalWrite(BsteppedPin[i%4], HIGH);
     digitalWrite(BsteppedPin[(i+1)%4], LOW);
     digitalWrite(BsteppedPin[(i+2)%4], LOW);
@@ -63,6 +64,7 @@ void Step(int StepMove){
     last_interrupt_time3 = interrupt_time3;
     }
   }
+  ledcWrite(DC_MOtorChannel, DCPulse[0]);
   }
 }
 
@@ -136,55 +138,18 @@ int stepmovedown[] = {0,-1000,-1000,-1000,-1000,-1000,-1000};
 int GearState = 0;
 int PrevGearState = 1;
 int Gearcount = 0;
-void IRAM_ATTR Shift(){
-  if(doUpShift){
-  Serial.println(Gearcount);
-  Gearcount +=1;
-  GearState = ((Gearcount%7)+1);
-  if((PrevGearState ==  GearState) || (PrevGearState ==7)){
-    //do nothing
-  }else if(PrevGearState < GearState){
-  unsigned long last_interrupt_time4 = 0;
-  int i=0;
-  while(i==0){
-    unsigned long interrupt_time4 = millis();
-    if (interrupt_time4 - last_interrupt_time4 <= 4000){
-    ledcWrite(DC_MOtorChannel, DCPulse[1]/4);
-    last_interrupt_time4 = interrupt_time4;
-    }else {
-      ledcWrite(DC_MOtorChannel, DCPulse[DCmotorCount%2]);
-      Step(stepmoveup[PrevGearState-1]);
-      PrevGearState = GearState;
-      i+=1;
+void IRAM_ATTR MqttMessage(){
+  if(Mqtt_input != "0"){
+    if(Mqtt_input == "+"){
+      //Serial.println(Gearcount);
+      doUpShift = true;
+    }else if(Mqtt_input == "-"){
+      //Serial.println(Gearcount);
+      doDownShift = true;
+    }else if(Mqtt_input == "s"){
+      doStartStop = true;
     }
-  }
-  }
-  doUpShift = false;
-  }
-
-  if(doDownShift){
-  Serial.println(Gearcount);
-  Gearcount -=1;
-  GearState = ((Gearcount%7)+1);
-  if((PrevGearState ==  GearState) || (PrevGearState ==1)){
-    //do nothing
-  }else if(PrevGearState > GearState){
-  unsigned long last_interrupt_time5 = 0;
-  int i=0;
-  while(i==0){
-    unsigned long interrupt_time5 = millis();
-    if (interrupt_time5 - last_interrupt_time5 <= 4000){
-    ledcWrite(DC_MOtorChannel, DCPulse[1]/4);
-    last_interrupt_time5 = interrupt_time5;
-    }else {
-      ledcWrite(DC_MOtorChannel, DCPulse[DCmotorCount%2]);
-      //Step(stepmovedown[PrevGearState-1]);
-      PrevGearState = GearState;
-      i+=1;
-    }
-  }
-  }
-  doDownShift = false;
+    Mqtt_input = "0";
   }
 }
 
@@ -215,13 +180,13 @@ void setup() {
   timerAlarmEnable(My_timer);                               //rev meter
 
   My_timer2 = timerBegin(1, 80, true);
-  timerAlarmWrite(My_timer2, 100000, true);
+  timerAlarmWrite(My_timer2, 10000, true);
   timerAttachInterrupt(My_timer2, &Start_Stop, true);
   timerAlarmEnable(My_timer2);    
 
   My_timer3 = timerBegin(2, 80, true);
-  timerAlarmWrite(My_timer3, 100000, true);
-  timerAttachInterrupt(My_timer3, &Shift, true);
+  timerAlarmWrite(My_timer3, 10000, true);
+  timerAttachInterrupt(My_timer3, &MqttMessage, true);
   timerAlarmEnable(My_timer3);      
 
   pinMode(Step1, OUTPUT);     //stepped motor 
@@ -246,25 +211,75 @@ void setup() {
 }
 
 void loop() {
-  Mqtt_input = "0";
+  
   client.loop();
 
   if (!client.connected()){
     connect();
   }
+
   client.publish(mqtt_rev_topic , String(Rev * 60));
   client.publish(mqtt_gear_topic , String(GearRatio[PrevGearState-1]) + " " + String(PrevGearState));
   LCD_Write();
   
-  if(Mqtt_input != "0"){
-    if(Mqtt_input == "+"){
-      //Serial.println(Gearcount);
-      doUpShift = true;
-    }else if(Mqtt_input == "-"){
-      //Serial.println(Gearcount);
-      doDownShift = true;
-    }else if(Mqtt_input == "s"){
-      doStartStop = true;
+  if(doUpShift){
+  if(Gearcount <= 7){
+    Gearcount +=1;
+    Serial.println(Gearcount);
+    }
+  GearState = ((Gearcount%7)+1);
+  if((PrevGearState ==  GearState) || (PrevGearState ==7)){
+    //do nothing
+  }else if(PrevGearState < GearState){
+  unsigned long last_interrupt_time4 = 0;
+  int i=0;
+  while(i==0){
+    unsigned long interrupt_time4 = millis();
+    if (interrupt_time4 - last_interrupt_time4 <= 4000){
+    ledcWrite(DC_MOtorChannel, DCPulse[1]/4);
+    last_interrupt_time4 = interrupt_time4;
+    }else {
+      ledcWrite(DC_MOtorChannel, DCPulse[DCmotorCount%2]);
+      Step(stepmoveup[PrevGearState-1]);
+      PrevGearState = GearState;
+      i+=1;
     }
   }
+  }
+  doUpShift = false;
+  }
+
+  if(doDownShift){
+  if(Gearcount >= 1){
+    Gearcount -=1;
+    Serial.println(Gearcount);
+    }
+  GearState = ((Gearcount%7)+1);
+  if((PrevGearState ==  GearState) || (PrevGearState ==1)){
+    //do nothing
+  }else if(PrevGearState > GearState){
+  unsigned long last_interrupt_time5 = 0;
+  int i=0;
+  while(i==0){
+    unsigned long interrupt_time5 = millis();
+    if (interrupt_time5 - last_interrupt_time5 <= 4000){
+    ledcWrite(DC_MOtorChannel, DCPulse[1]/4);
+    last_interrupt_time5 = interrupt_time5;
+    }else {
+      ledcWrite(DC_MOtorChannel, DCPulse[DCmotorCount%2]);
+      Step(stepmovedown[PrevGearState-1]);
+      PrevGearState = GearState;
+      i+=1;
+    }
+  }
+  }
+  doDownShift = false;
+  }
+
+
+
+
+
+
+  
 }

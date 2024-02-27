@@ -66,12 +66,12 @@ void Step(int StepMove){
   }
 }
 
-#define ON_OFF_pin_out  12
-#define ON_OFF_pin_in  14
-#define UpShift_pin_out  25
+//#define ON_OFF_pin_out  12
+//#define ON_OFF_pin_in  14
+#define DownShift_pin_in  25
 #define UpShift_pin_in  26
-#define DownShift_pin_out  32
-#define DownShift_pin_in  33
+//#define DownShift_pin_out  32
+#define ON_OFF_pin_in  33
 
 const char ssid[] = "Xiaomi12.";
 const char pass[] = "09224616000";
@@ -117,14 +117,16 @@ void messageReceived(String &topic, String &payload) {
 
 int DCPulse[] = {1024,0};
 int DCmotorCount = 0;
-bool doStartStop;
-bool doUpShift;
-bool doDownShift;
+bool doStartStop = false;
+bool doUpShift = false;
+bool doDownShift = false;
 void IRAM_ATTR Start_Stop(){
   if(doStartStop){
   DCmotorCount += 1;
-  //Serial.println(DCmotorCount);
+  Serial.println(DCmotorCount);
   ledcWrite(DC_MOtorChannel, DCPulse[DCmotorCount%2]);
+  Serial.print("DCPulse");
+  Serial.println(DCPulse[DCmotorCount%2]);
   doStartStop = false;
   }
 }
@@ -134,7 +136,7 @@ int stepmovedown[] = {0,-1000,-1000,-1000,-1000,-1000,-1000};
 int GearState = 0;
 int PrevGearState = 1;
 int Gearcount = 0;
-void IRAM_ATTR Shiftup(){
+void IRAM_ATTR Shift(){
   if(doUpShift){
   Serial.println(Gearcount);
   Gearcount +=1;
@@ -151,7 +153,7 @@ void IRAM_ATTR Shiftup(){
     last_interrupt_time4 = interrupt_time4;
     }else {
       ledcWrite(DC_MOtorChannel, DCPulse[DCmotorCount%2]);
-      //Step(stepmoveup[PrevGearState-1]);
+      Step(stepmoveup[PrevGearState-1]);
       PrevGearState = GearState;
       i+=1;
     }
@@ -219,7 +221,7 @@ void setup() {
 
   My_timer3 = timerBegin(2, 80, true);
   timerAlarmWrite(My_timer3, 100000, true);
-  timerAttachInterrupt(My_timer3, &Shiftup, true);
+  timerAttachInterrupt(My_timer3, &Shift, true);
   timerAlarmEnable(My_timer3);      
 
   pinMode(Step1, OUTPUT);     //stepped motor 

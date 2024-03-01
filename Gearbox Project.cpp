@@ -33,8 +33,10 @@ void IRAM_ATTR Revcal(){
 #define Step2  18
 #define Step3  5
 #define Step4  17
-int FsteppedPin[] = {Step1,Step2,Step3,Step4};
-int BsteppedPin[] = {Step4,Step3,Step2,Step1};
+int BsteppedPin[] = {Step1,Step2,Step3,Step4};
+int FsteppedPin[] = {Step4,Step3,Step2,Step1};
+int DCPulse[] = {0,1024};
+int DCmotorCount = 0;
 void Step(int StepMove){
   if(StepMove >= 0){
      unsigned long last_interrupt_time2 = 0;
@@ -49,9 +51,9 @@ void Step(int StepMove){
     last_interrupt_time2 = interrupt_time2;
     }
   }
-  ledcWrite(DC_MOtorChannel, DCPulse[0]);
-  }else {
-    StepMove = abs(StepMove);
+  ledcWrite(DC_MOtorChannel, DCPulse[DCmotorCount%2]);
+  }else if(StepMove <0){
+    StepMove = (-1)*StepMove;
     unsigned long last_interrupt_time3 = 0;
   for(int i=0; i<StepMove;){
     unsigned long interrupt_time3 = millis();
@@ -64,7 +66,7 @@ void Step(int StepMove){
     last_interrupt_time3 = interrupt_time3;
     }
   }
-  ledcWrite(DC_MOtorChannel, DCPulse[0]);
+  ledcWrite(DC_MOtorChannel, DCPulse[DCmotorCount%2]);
   }
 }
 
@@ -92,15 +94,12 @@ void connect() {
   Serial.print("checking wifi...");
   while (WiFi.status() != WL_CONNECTED) {
     Serial.print(".");
-    delay(1000);
   }
-
+  
   Serial.print("\nconnecting...");
   while (!client.connect(mqtt_client_id)) {  
     Serial.print(".");
-    delay(1000);
   }
-
   Serial.println("\nconnected!");
 
   client.subscribe(mqtt_topic);
@@ -117,8 +116,6 @@ void messageReceived(String &topic, String &payload) {
   }
 }
 
-int DCPulse[] = {1024,0};
-int DCmotorCount = 0;
 bool doStartStop = false;
 bool doUpShift = false;
 bool doDownShift = false;
@@ -133,8 +130,8 @@ void IRAM_ATTR Start_Stop(){
   }
 }
 
-int stepmoveup[] = {1000,1000,1000,1000,1000,1000,0};
-int stepmovedown[] = {0,-1000,-1000,-1000,-1000,-1000,-1000};
+int stepmoveup[] = {1024,1024,1024,1024,1024,1024,0};
+int stepmovedown[] = {0,-1024,-1024,-1024,-1024,-1024,-1024};
 int GearState = 0;
 int PrevGearState = 1;
 int Gearcount = 0;
@@ -153,26 +150,31 @@ void IRAM_ATTR MqttMessage(){
   }
 }
 
-int GearRatio[] = {-2,-1,0,1,2,3,4};
+double GearRatio[] = {0.56,0.68,0.83,1,1.21,1.46,1.78};
 LCD_I2C lcd(0x27, 16, 2);
 void LCD_Write(){
-  lcd.clear();
-  lcd.setCursor(2, 0);
+  //Serial.print("aaaaaa");
+  //lcd.clear();
+  lcd.setCursor(1, 0);
   lcd.print("Gear Pos = ");
   lcd.print(PrevGearState);
-  lcd.print(" Ratio = ");
-  lcd.print(GearRatio[PrevGearState-1]);
-  lcd.setCursor(2, 1);
+  //lcd.print(", I/O = ");
+  //lcd.print(GearRatio[PrevGearState-1]);
+  lcd.setCursor(1, 1);
   lcd.print("Rev/min = ");
   lcd.print(Rev * 60);
 }
+
+//void IRAM_ATTR Button_Start_Stop(){
+//  doStartStop = true;
+//}
 
 void setup() {
   Serial.begin(9600);
   ledcAttachPin(DC_Motor, DC_MOtorChannel);           //dc motor control
   ledcSetup(DC_MOtorChannel, freq, resolution);       //dc motor control
 
-  pinMode(Hall_Sensor, INPUT);                              //rev meter
+  pinMode(Hall_Sensor, INPUT_PULLDOWN);                              //rev meter
   attachInterrupt(Hall_Sensor, &RevCounter, RISING);  
   My_timer = timerBegin(0, 80, true);
   timerAttachInterrupt(My_timer, &Revcal, true);
@@ -197,17 +199,19 @@ void setup() {
   lcd.begin();    //LCD
   lcd.backlight();
 
-  pinMode(ON_OFF_pin_in, INPUT);//on off           
-  pinMode(UpShift_pin_in, INPUT);//upshift
-  pinMode(DownShift_pin_in, INPUT);//downshift
+  pinMode(ON_OFF_pin_in, INPUT_PULLDOWN);//on off           
+  //attachInterrupt(ON_OFF_pin_in, &Button_Start_Stop, RISING);
+  pinMode(UpShift_pin_in, INPUT_PULLDOWN);//upshift
+  pinMode(DownShift_pin_in, INPUT_PULLDOWN);//downshift
   
-
 
   WiFi.begin(ssid, pass);
   client.begin(mqtt_broker, MQTT_PORT, net);
   client.onMessage(messageReceived);
 
   connect();
+
+  ledcWrite(DC_MOtorChannel, 0);
 }
 
 void loop() {
@@ -219,7 +223,7 @@ void loop() {
   }
 
   client.publish(mqtt_rev_topic , String(Rev * 60));
-  client.publish(mqtt_gear_topic , String(GearRatio[PrevGearState-1]) + " " + String(PrevGearState));
+  client.publish(mqtt_gear_topic , "Gear Pos" + String(PrevGearState) + ", Ratio" + String(GearRatio[PrevGearState-1]));
   LCD_Write();
   
   if(doUpShift){
@@ -231,20 +235,9 @@ void loop() {
   if((PrevGearState ==  GearState) || (PrevGearState ==7)){
     //do nothing
   }else if(PrevGearState < GearState){
-  unsigned long last_interrupt_time4 = 0;
-  int i=0;
-  while(i==0){
-    unsigned long interrupt_time4 = millis();
-    if (interrupt_time4 - last_interrupt_time4 <= 4000){
-    ledcWrite(DC_MOtorChannel, DCPulse[1]/4);
-    last_interrupt_time4 = interrupt_time4;
-    }else {
-      ledcWrite(DC_MOtorChannel, DCPulse[DCmotorCount%2]);
-      Step(stepmoveup[PrevGearState-1]);
-      PrevGearState = GearState;
-      i+=1;
-    }
-  }
+    ledcWrite(DC_MOtorChannel, 256);
+    Step(stepmoveup[PrevGearState-1]);
+    PrevGearState = GearState;
   }
   doUpShift = false;
   }
@@ -258,28 +251,37 @@ void loop() {
   if((PrevGearState ==  GearState) || (PrevGearState ==1)){
     //do nothing
   }else if(PrevGearState > GearState){
-  unsigned long last_interrupt_time5 = 0;
-  int i=0;
-  while(i==0){
-    unsigned long interrupt_time5 = millis();
-    if (interrupt_time5 - last_interrupt_time5 <= 4000){
-    ledcWrite(DC_MOtorChannel, DCPulse[1]/4);
-    last_interrupt_time5 = interrupt_time5;
-    }else {
-      ledcWrite(DC_MOtorChannel, DCPulse[DCmotorCount%2]);
-      Step(stepmovedown[PrevGearState-1]);
-      PrevGearState = GearState;
-      i+=1;
-    }
-  }
+    ledcWrite(DC_MOtorChannel, 256);
+    Step(stepmovedown[PrevGearState-1]);
+    PrevGearState = GearState;
   }
   doDownShift = false;
   }
 
+  if(PrevGearState < GearState){
+    doUpShift = true;
+  }else if(PrevGearState > GearState){
+    doDownShift = true;
+  }
 
+  if(digitalRead(ON_OFF_pin_in)==HIGH){
+    while (digitalRead(ON_OFF_pin_in)==HIGH){
+      //do nothing
+    }
+    doStartStop = true;
+  }
 
+  if(digitalRead(UpShift_pin_in)==HIGH){
+    while (digitalRead(UpShift_pin_in)==HIGH){
+      //do nothing
+    }
+    doUpShift = true;
+  }
 
-
-
-  
+  if(digitalRead(DownShift_pin_in)==HIGH){
+    while (digitalRead(DownShift_pin_in)==HIGH){
+      //do nothing
+    }
+    doDownShift = true;
+  }
 }

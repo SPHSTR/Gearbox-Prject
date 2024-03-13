@@ -130,7 +130,7 @@ void IRAM_ATTR Start_Stop(){
   }
 }
 
-int stepmoveup[] = {1024,1024,1024,1024,1024,1024,0};
+int stepmoveup[] = {1024,1024,1024,1024,2794,1024,0};
 int stepmovedown[] = {0,-1024,-1024,-1024,-1024,-1024,-1024};
 int GearState = 0;
 int PrevGearState = 1;
@@ -162,7 +162,7 @@ void LCD_Write(){
   //lcd.print(GearRatio[PrevGearState-1]);
   lcd.setCursor(1, 1);
   lcd.print("Rev/min = ");
-  lcd.print(Rev * 60);
+  lcd.print(Rev * 15);
 }
 
 //void IRAM_ATTR Button_Start_Stop(){
@@ -222,12 +222,12 @@ void loop() {
     connect();
   }
 
-  client.publish(mqtt_rev_topic , String(Rev * 60));
+  client.publish(mqtt_rev_topic , String(Rev * 15));
   client.publish(mqtt_gear_topic , "Gear Pos" + String(PrevGearState) + ", Ratio" + String(GearRatio[PrevGearState-1]));
   LCD_Write();
   
   if(doUpShift){
-  if(Gearcount <= 7){
+  if(Gearcount < 7){
     Gearcount +=1;
     Serial.println(Gearcount);
     }
@@ -235,7 +235,7 @@ void loop() {
   if((PrevGearState ==  GearState) || (PrevGearState ==7)){
     //do nothing
   }else if(PrevGearState < GearState){
-    ledcWrite(DC_MOtorChannel, 256);
+    ledcWrite(DC_MOtorChannel, 170);
     Step(stepmoveup[PrevGearState-1]);
     PrevGearState = GearState;
   }
@@ -251,7 +251,7 @@ void loop() {
   if((PrevGearState ==  GearState) || (PrevGearState ==1)){
     //do nothing
   }else if(PrevGearState > GearState){
-    ledcWrite(DC_MOtorChannel, 256);
+    ledcWrite(DC_MOtorChannel, 170);
     Step(stepmovedown[PrevGearState-1]);
     PrevGearState = GearState;
   }
